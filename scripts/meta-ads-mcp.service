@@ -1,0 +1,15 @@
+[Unit]
+Description=Meta Ads MCP server (SSE transport)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/meta-ads-mcp
+EnvironmentFile=/opt/meta-ads-mcp/.env
+ExecStart=/opt/meta-ads-mcp/.venv/bin/meta-ads-mcp --sse --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
