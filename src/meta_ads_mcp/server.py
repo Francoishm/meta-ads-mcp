@@ -125,8 +125,15 @@ async def _serve_stdio():
         await server.run(read, write, server.create_initialization_options())
 
 
-async def _serve_sse(host: str, port: int):
-    """Lightweight HTTP/SSE server for remote Claude Desktop connection."""
+async def _serve_sse(host: str, port: int, prefix: str = ""):
+    """Lightweight HTTP/SSE server for remote Claude Desktop connection.
+
+    `prefix` is the URL path prefix that the public endpoint is exposed
+    under (e.g. behind nginx). The SSE event 'endpoint' will then point
+    the client to `{prefix}/messages/...` so the prefix survives the
+    reverse proxy. Mount path is also adjusted so Starlette receives
+    the same path forwarded by nginx without any rewrite.
+    """
     try:
         from mcp.server.sse import SseServerTransport
         from starlette.applications import Starlette
@@ -136,15 +143,19 @@ async def _serve_sse(host: str, port: int):
         sys.exit("SSE mode needs 'starlette' and 'uvicorn'. pip install starlette uvicorn")
 
     server = build_server()
-    sse = SseServerTransport("/messages/")
+    prefix = prefix.rstrip("/")
+    messages_path = f"{prefix}/messages/" if prefix else "/messages/"
+    sse_path = f"{prefix}/sse" if prefix else "/sse"
+
+    sse = SseServerTransport(messages_path)
 
     async def handle_sse(request):
         async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
             await server.run(streams[0], streams[1], server.create_initialization_options())
 
     app = Starlette(routes=[
-        Route("/sse", endpoint=handle_sse),
-        Mount("/messages/", app=sse.handle_post_message),
+        Route(sse_path, endpoint=handle_sse),
+        Mount(messages_path, app=sse.handle_post_message),
     ])
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     await uvicorn.Server(config).serve()
@@ -161,11 +172,17 @@ def main():
     parser.add_argument("--sse", action="store_true", help="Run as HTTP/SSE server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=int(os.environ.get("MCP_PORT", 8765)))
+    parser.add_argument(
+        "--sse-prefix",
+        default=os.environ.get("MCP_SSE_PREFIX", ""),
+        help="URL prefix when fronted by a reverse proxy (e.g. /meta-ads-mcp)",
+    )
     args = parser.parse_args()
 
     if args.sse:
-        logger.info("Starting Meta Ads MCP (SSE) on %s:%d", args.host, args.port)
-        asyncio.run(_serve_sse(args.host, args.port))
+        logger.info("Starting Meta Ads MCP (SSE) on %s:%d (prefix=%r)",
+                     args.host, args.port, args.sse_prefix)
+        asyncio.run(_serve_sse(args.host, args.port, args.sse_prefix))
     else:
         logger.info("Starting Meta Ads MCP (stdio)")
         asyncio.run(_serve_stdio())

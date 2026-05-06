@@ -7,7 +7,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/meta-ads-mcp
 EnvironmentFile=/opt/meta-ads-mcp/.env
-ExecStart=/opt/meta-ads-mcp/.venv/bin/meta-ads-mcp --sse --host 127.0.0.1 --port 8765
+ExecStart=/opt/meta-ads-mcp/.venv/bin/meta-ads-mcp --sse --host 127.0.0.1 --port 8765 --sse-prefix /meta-ads-mcp
 Restart=on-failure
 RestartSec=5
 
